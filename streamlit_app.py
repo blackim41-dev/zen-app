@@ -33,7 +33,7 @@ import requests
 from datetime import date, datetime
 import pandas as pd
 
-GAS_BASE_URL = "https://script.google.com/macros/s/AKfycbzxYVyd1SuVzAt-FDQvAymV7u3nLkbFZ4ymni-Oqo1naWORAsZwfbCefqfvT-tKW8Zmkg/exec"
+GAS_BASE_URL = "https://script.google.com/macros/s/AKfycbxo0O6i7nw7-pRb9XbwIbESwwgVyugybuqGwKWGibzqSQHctS0eRpjGw5DjVZdoyTfZqw/exec"
 
 GAS_GET_URL = GAS_BASE_URL + "?action=get"
 GAS_POST_URL = GAS_BASE_URL
