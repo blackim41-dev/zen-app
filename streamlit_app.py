@@ -36,8 +36,6 @@ import pandas as pd
 session = requests.Session()
 
 GAS_BASE_URL = "https://script.google.com/macros/s/AKfycbxo0O6i7nw7-pRb9XbwIbESwwgVyugybuqGwKWGibzqSQHctS0eRpjGw5DjVZdoyTfZqw/exec"
-# 自ファイル
-# GAS_BASE_URL = "https://script.google.com/macros/s/AKfycbxBxpHRVXoWCru_0jL7lZc0U5vA_FXaOBRaoCgEVBEZGZ-0MpUAYUKjNuqAxetIyBMgYQ/exec"
 
 GAS_POST_URL = GAS_BASE_URL
 
