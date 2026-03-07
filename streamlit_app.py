@@ -33,57 +33,68 @@ import requests
 from datetime import date, datetime
 import pandas as pd
 
+session = requests.Session()
+
 GAS_BASE_URL = "https://script.google.com/macros/s/AKfycbxo0O6i7nw7-pRb9XbwIbESwwgVyugybuqGwKWGibzqSQHctS0eRpjGw5DjVZdoyTfZqw/exec"
 
-GAS_GET_URL = GAS_BASE_URL + "?action=get"
 GAS_POST_URL = GAS_BASE_URL
 
-@st.cache_data
-def load_data():
+@st.cache_data(ttl=60)
+def load_customer():
     CUSTOMER_COLUMNS = ["氏名","ニックネーム","住所","電話番号",
                         "生年月日","勤務先・業種","タバコ_銘柄",
                         "好き","苦手","初回来店日","紹介者_氏名","メモ_顧客","顧客_ID","削除"]
 
+    url = f"{GAS_BASE_URL}?action=get_customer"
+    res = session.get(url, timeout=30)
+    res.raise_for_status()
+
+    data = res.json()
+    df = pd.DataFrame(data)
+
+    if df.empty:
+        df = pd.DataFrame(columns=CUSTOMER_COLUMNS)
+
+    if "削除" not in df.columns:
+        df["削除"] = ""
+
+    df["削除"] = df["削除"].apply(lambda x: "1" if str(x).strip() == "1" else "0")
+
+    return df
+
+@st.cache_data(ttl=60)
+def load_visit():
     VISIT_COLUMNS = ["来店日","曜日","同伴_氏名","担当_氏名",
                     "延長回数","キープ銘柄","同時来店_氏名","プレゼント_受","プレゼント_渡",
                     "イベント名","メモ_来店","来店履歴_ID","顧客_ID","削除"]
 
-    # --- GAS から取得 ---
-    res = requests.get(GAS_GET_URL, timeout=30)
+    url = f"{GAS_BASE_URL}?action=get_visit"
+    res = session.get(url, timeout=30)
     res.raise_for_status()
+
     data = res.json()
+    df = pd.DataFrame(data)
 
-    customer_df = pd.DataFrame(data.get("customer", []))
-    visit_df = pd.DataFrame(data.get("visit", []))
+    if df.empty:
+        df = pd.DataFrame(columns=VISIT_COLUMNS)
 
-    # --- 空でも列を保証 ---
-    if customer_df.empty:
-        customer_df = pd.DataFrame(columns=CUSTOMER_COLUMNS)
+    if "削除" not in df.columns:
+        df["削除"] = ""
 
-    if visit_df.empty:
-        visit_df = pd.DataFrame(columns=VISIT_COLUMNS)
+    df["削除"] = df["削除"].apply(lambda x: "1" if str(x).strip() == "1" else "0")
 
-    # ---  削除列を保証 --- 
-    if "削除" not in customer_df.columns:
-        customer_df["削除"] = ""
-
-    if "削除" not in visit_df.columns:
-        visit_df["削除"] = ""
-
-    # --- 削除列を正規化 ---
-    customer_df["削除"] = customer_df["削除"].apply(lambda x: "1" if str(x).strip() == "1" else "0")
-    visit_df["削除"] = visit_df["削除"].apply(lambda x: "1" if str(x).strip() == "1" else "0")
-
-    return customer_df, visit_df
+    return df
 
 # =====================
 # DataFrame を読み込む
 # =====================
-customer_df, visit_df = load_data()
+customer_df = load_customer()
+visit_df = load_visit()
 
 # ★ 日付列だけ明示的に None に統一
-customer_df["初回来店日"] = customer_df["初回来店日"].where(customer_df["初回来店日"].notna(), None)
-visit_df["来店日"] = visit_df["来店日"].where(visit_df["来店日"].notna(), None)
+customer_df["初回来店日"].fillna("", inplace=True)
+if not visit_df.empty:
+    visit_df["来店日"].fillna("", inplace=True)
 
 # --- customer ---
 text_cols = customer_df.columns.difference(["生年月日", "初回来店日"])
@@ -127,9 +138,10 @@ def safe_date(v):
 
     if isinstance(v, str) and v.strip() != "":
         try:
-            return pd.to_datetime(v).date()
+            return datetime.strptime(v[:10], "%Y-%m-%d").date()
         except:
             return date.today()
+    return date.today()
 
 def safe_bool(v):
     return str(v).lower() in ("true", "1", "yes")
@@ -216,9 +228,6 @@ if menu_changed:
     st.session_state.pop("search_customer_name", None)
     st.session_state.pop("search_visit_name", None)
     st.session_state.customer_mode_radio = "新規顧客"
-
-    # ★ キャッシュだけクリア
-    st.cache_data.clear()
 
     # ★ 最後に prev_menu 更新
     st.session_state.prev_menu = menu
@@ -410,7 +419,7 @@ if menu == "顧客情報入力":
         memo_cus = st.text_area("メモ_顧客", key="input_memo_cus",height=60, disabled=is_deleted)
 
     # ==================
-    # ボタン
+    # ボタン_顧客情報
     # ==================
     save_customer = st.button("顧客情報_保存", disabled=is_deleted)
     delete_btn = st.button("顧客情報_削除", disabled=is_deleted)
@@ -426,8 +435,13 @@ if menu == "顧客情報入力":
             "顧客_ID": cid,
             "削除": "1"
         }
-        requests.post(GAS_POST_URL, json=payload)
-        st.cache_data.clear()
+        r = session.post(GAS_POST_URL, json=payload, timeout=30)
+        if r.status_code != 200:
+            st.error("保存エラー")
+            st.write(r.text)
+            st.stop()
+
+        load_customer.clear()
         st.session_state.flash_message = "削除しました ✅"
         st.rerun()
 
@@ -437,8 +451,13 @@ if menu == "顧客情報入力":
             "顧客_ID": cid,
             "削除": "0"
         }
-        requests.post(GAS_POST_URL, json=payload)
-        st.cache_data.clear()
+        r = session.post(GAS_POST_URL, json=payload, timeout=30)
+        if r.status_code != 200:
+            st.error("保存エラー")
+            st.write(r.text)
+            st.stop()
+
+        load_customer.clear()
         st.session_state.flash_message = "復元しました ✅"
         st.rerun()
       
@@ -471,15 +490,14 @@ if menu == "顧客情報入力":
         }
 
         with st.spinner("保存中です…"):
-            requests.post(GAS_POST_URL, json=payload, timeout=30)
-
-        # --- 日付カラムを文字列に変換 ---
-        for col in ["生年月日", "初回来店日"]:
-            if col in customer_df.columns:
-                customer_df[col] = customer_df[col].astype(str)
+            r = session.post(GAS_POST_URL, json=payload, timeout=30)
+            if r.status_code != 200:
+                st.error("保存エラー")
+                st.write(r.text)
+                st.stop()
 
         # ★ ここで必ずキャッシュ破棄＋再読込
-        st.cache_data.clear()         
+        load_customer.clear()        
         st.session_state.loaded_customer_id = cid
         st.session_state.flash_message = "保存しました ✅"
         st.rerun()
@@ -536,10 +554,10 @@ elif menu == "来店情報入力":
     name_labels = ["（未選択）"]
     name_map = {}
 
-    for _, r in filtered_df.sort_values("ニックネーム").iterrows():
-        label = f'{r["氏名"]}（{r["ニックネーム"]}）'
-        name_labels.append(label)
-        name_map[label] = r["顧客_ID"]
+    sorted_df = filtered_df.sort_values("ニックネーム")
+    labels = sorted_df["氏名"] + "（" + sorted_df["ニックネーム"] + "）"
+    name_labels = ["（未選択）"] + labels.tolist()
+    name_map = dict(zip(labels, sorted_df["顧客_ID"]))
 
     selected_label = st.selectbox("氏名・ニックネームを選択",
         name_labels, key="customer_name_big_select_visit")
@@ -583,14 +601,12 @@ elif menu == "来店情報入力":
             target_visits = target_visits.sort_values("来店日_dt", ascending=False)
 
             # --- 表示ラベル作成 ---
-            visit_labels = target_visits.apply(
-                lambda r: (
-                    f'{r["来店日_dt"].date()}（{get_weekday(r["来店日_dt"])}）{r["来店履歴_ID"]}'
-                    + "【削除済】" if str(r.get("削除","0"))=="1"
-                    else f'{r["来店日_dt"].date()}（{get_weekday(r["来店日_dt"])}）{r["来店履歴_ID"]}'
-                ),
-                axis=1
-            )
+            dates = target_visits["来店日_dt"].dt.date.astype(str)
+            ids = target_visits["来店履歴_ID"]
+            labels = dates + "（" + target_visits["来店日_dt"].apply(get_weekday) + "）" + ids
+            deleted_mask = target_visits["削除"].astype(str) == "1"
+            labels = labels.where(~deleted_mask, labels + "【削除済】")
+            visit_labels = labels
 
             visit_map = dict(zip(visit_labels, target_visits["来店履歴_ID"]))
 
@@ -674,6 +690,7 @@ elif menu == "来店情報入力":
         event = st.text_area("イベント名", key="input_event",height=60, disabled=is_deleted)
         memovis = st.text_area("メモ_来店", key="input_memo_vis",height=60, disabled=is_deleted) 
 
+    # ボタン_来店情報
     save_visit = st.button("来店情報_保存", disabled= is_deleted)
     delete_btn = st.button("来店情報_削除", disabled= is_deleted)
     restore_btn = st.button("来店情報_復元", disabled=not is_deleted)
@@ -695,8 +712,13 @@ elif menu == "来店情報入力":
                 "来店履歴_ID": vid
             }
 
-            requests.post(GAS_POST_URL, json=payload)
-            st.cache_data.clear()
+            r = session.post(GAS_POST_URL, json=payload, timeout=30)
+            if r.status_code != 200:
+                st.error("保存エラー")
+                st.write(r.text)
+                st.stop()
+
+            load_visit.clear()
             st.session_state.flash_message = "削除しました ✅"
             st.rerun()
 
@@ -705,8 +727,13 @@ elif menu == "来店情報入力":
             "mode": "visit_restore",
             "来店履歴_ID": vid,
         }
-        requests.post(GAS_POST_URL, json=payload)
-        st.cache_data.clear()
+        r = session.post(GAS_POST_URL, json=payload, timeout=30)
+        if r.status_code != 200:
+            st.error("保存エラー")
+            st.write(r.text)
+            st.stop()
+
+        load_visit.clear()
         st.session_state.flash_message = "復元しました ✅"
         st.rerun()
             
@@ -718,7 +745,8 @@ elif menu == "来店情報入力":
     # =====================
     # 来店情報の保存
     # =====================
-    if save_visit:
+    if save_visit and not st.session_state.get("saving_visit", False):
+        st.session_state.saving_visit = True
         cid = st.session_state.get("current_customer_id")
 
         if not cid:
@@ -735,7 +763,7 @@ elif menu == "来店情報入力":
 
         payload = {
             "mode": "visit_only",
-            "来店日": date_to_str(visit_date),
+            "来店日": visit_date.strftime("%Y-%m-%d"),
             "曜日": get_weekday(visit_date),
             "同伴_氏名": accompany,
             "担当_氏名": staff,
@@ -752,16 +780,16 @@ elif menu == "来店情報入力":
         }
     
         with st.spinner("保存中です…"):
-            requests.post(GAS_POST_URL, json=payload, timeout=30)
+            r = session.post(GAS_POST_URL, json=payload, timeout=30)
 
-        # --- 日付カラムを文字列に変換 ---
-        for col in ["来店日"]:
-            if col in visit_df.columns:
-                visit_df[col] = visit_df[col].astype(str)
+            if r.status_code != 200:
+                st.error("保存エラーが発生しました")
+                st.write(r.text)
+                st.stop()
 
         # 来店保存後
-        st.session_state.after_visit_save = True
-        st.cache_data.clear()
+        st.session_state.saving_visit = False
+        load_visit.clear()
 
         st.session_state.selected_visit_id = vid
 
@@ -769,7 +797,7 @@ elif menu == "来店情報入力":
             st.session_state.flash_message = "保存しました ✅"
         else:
             st.session_state.flash_message = "更新しました ✅"
-            st.session_state.return_to_edit = True
+            st.session_state.saving_visit = False
 
         st.rerun()
 
