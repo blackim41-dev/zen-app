@@ -31,6 +31,7 @@ ul[role="listbox"] li {
 
 import requests
 from datetime import date, datetime
+import time
 import pandas as pd
 
 session = requests.Session()
@@ -424,6 +425,16 @@ if menu == "顧客情報入力":
 
         load_customer.clear()
         st.session_state.flash_message = "削除しました ✅"
+        st.session_state.flash_time = time.time()
+        # 表示処理
+        if st.session_state.flash_message:
+            elapsed = time.time() - st.session_state.flash_time
+
+            if elapsed < 5:
+                st.success(st.session_state.flash_message)
+            else:
+                # 5秒経過したら消す
+                st.session_state.flash_message = None        
         st.rerun()
 
     if restore_btn and is_deleted:
@@ -440,6 +451,16 @@ if menu == "顧客情報入力":
 
         load_customer.clear()
         st.session_state.flash_message = "復元しました ✅"
+        st.session_state.flash_time = time.time()
+        # 表示処理
+        if st.session_state.flash_message:
+            elapsed = time.time() - st.session_state.flash_time
+
+            if elapsed < 5:
+                st.success(st.session_state.flash_message)
+            else:
+                # 5秒経過したら消す
+                st.session_state.flash_message = None        
         st.rerun()
       
     # =====================
@@ -479,6 +500,16 @@ if menu == "顧客情報入力":
         load_customer.clear()        
         st.session_state.loaded_customer_id = cid
         st.session_state.flash_message = "保存しました ✅"
+        st.session_state.flash_time = time.time()
+        # 表示処理
+        if st.session_state.flash_message:
+            elapsed = time.time() - st.session_state.flash_time
+
+            if elapsed < 5:
+                st.success(st.session_state.flash_message)
+            else:
+                # 5秒経過したら消す
+                st.session_state.flash_message = None        
         st.rerun()
 
 # =====================
@@ -700,6 +731,16 @@ elif menu == "来店情報入力":
 
             load_visit.clear()
             st.session_state.flash_message = "削除しました ✅"
+            st.session_state.flash_time = time.time()
+            # 表示処理
+            if st.session_state.flash_message:
+                elapsed = time.time() - st.session_state.flash_time
+
+                if elapsed < 5:
+                    st.success(st.session_state.flash_message)
+                else:
+                    # 5秒経過したら消す
+                    st.session_state.flash_message = None
             st.rerun()
 
     if restore_btn and is_deleted:
@@ -715,6 +756,16 @@ elif menu == "来店情報入力":
 
         load_visit.clear()
         st.session_state.flash_message = "復元しました ✅"
+        st.session_state.flash_time = time.time()
+        # 表示処理
+        if st.session_state.flash_message:
+            elapsed = time.time() - st.session_state.flash_time
+
+            if elapsed < 5:
+                st.success(st.session_state.flash_message)
+            else:
+                # 5秒経過したら消す
+                st.session_state.flash_message = None        
         st.rerun()
             
     def date_to_str(d):
@@ -775,8 +826,28 @@ elif menu == "来店情報入力":
 
         if visit_mode == "新規来店入力":
             st.session_state.flash_message = "保存しました ✅"
+            st.session_state.flash_time = time.time()
+            # 表示処理
+            if st.session_state.flash_message:
+                elapsed = time.time() - st.session_state.flash_time
+
+                if elapsed < 5:
+                    st.success(st.session_state.flash_message)
+                else:
+                    # 5秒経過したら消す
+                    st.session_state.flash_message = None            
         else:
             st.session_state.flash_message = "更新しました ✅"
+            st.session_state.flash_time = time.time()
+            # 表示処理
+            if st.session_state.flash_message:
+                elapsed = time.time() - st.session_state.flash_time
+
+                if elapsed < 5:
+                    st.success(st.session_state.flash_message)
+                else:
+                    # 5秒経過したら消す
+                    st.session_state.flash_message = None            
             st.session_state.saving_visit = False
 
         st.rerun()
