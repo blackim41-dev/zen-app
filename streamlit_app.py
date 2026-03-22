@@ -36,14 +36,15 @@ import pandas as pd
 session = requests.Session()
 
 GAS_BASE_URL = "https://script.google.com/macros/s/AKfycbxo0O6i7nw7-pRb9XbwIbESwwgVyugybuqGwKWGibzqSQHctS0eRpjGw5DjVZdoyTfZqw/exec"
+# 自ファイル
+# GAS_BASE_URL = "https://script.google.com/macros/s/AKfycbxBxpHRVXoWCru_0jL7lZc0U5vA_FXaOBRaoCgEVBEZGZ-0MpUAYUKjNuqAxetIyBMgYQ/exec"
 
 GAS_POST_URL = GAS_BASE_URL
 
 @st.cache_data(ttl=60)
 def load_customer():
-    CUSTOMER_COLUMNS = ["氏名","ニックネーム","住所","電話番号",
-                        "生年月日","勤務先・業種","タバコ_銘柄",
-                        "好き","苦手","初回来店日","紹介者_氏名","メモ_顧客","顧客_ID","削除"]
+    CUSTOMER_COLUMNS = ["氏名","ふりがな","ニックネーム","会社名","電話番号","住所",
+                        "生年月日","初回来店日","顧客_ID","削除"]
 
     url = f"{GAS_BASE_URL}?action=get_customer"
     res = session.get(url, timeout=30)
@@ -65,8 +66,8 @@ def load_customer():
 @st.cache_data(ttl=60)
 def load_visit():
     VISIT_COLUMNS = ["来店日","曜日","同伴_氏名","担当_氏名",
-                    "延長回数","キープ銘柄","同時来店_氏名","プレゼント_受","プレゼント_渡",
-                    "イベント名","メモ_来店","来店履歴_ID","顧客_ID","削除"]
+                    "延長回数","キープ銘柄","プレゼント_受","プレゼント_渡",
+                    "メモ_来店","来店履歴_ID","顧客_ID","削除"]
 
     url = f"{GAS_BASE_URL}?action=get_visit"
     res = session.get(url, timeout=30)
@@ -168,17 +169,13 @@ def date_to_str(d):
 # =====================
 CUSTOMER_STATE_MAP = {
     "input_name": ("氏名", ""),
+    "input_kana": ("ふりがな", ""),
     "input_nick": ("ニックネーム", ""),
-    "input_addr": ("住所", ""),
+    "input_job": ("会社名", ""),
     "input_tel": ("電話番号", ""),
+    "input_addr": ("住所", ""),
     "input_birth": ("生年月日",date(2000,1,1)),
-    "input_job": ("勤務先・業種", ""),
-    "input_brand": ("タバコ_銘柄", ""),
-    "input_like": ("好き", ""),
-    "input_dislike": ("苦手", ""),
     "input_first_visit": ("初回来店日", date.today()),
-    "input_intro_name": ("紹介者_氏名", ""),
-    "input_memo_cus": ("メモ_顧客", ""),
 }
 
 VISIT_STATE_MAP = {
@@ -190,8 +187,6 @@ VISIT_STATE_MAP = {
     "input_keep": ("キープ銘柄", ""),
     "input_preget": ("プレゼント_受", ""),
     "input_pre": ("プレゼント_渡", ""),
-    "input_same": ("同時来店_氏名", ""),    
-    "input_event": ("イベント名", ""),
     "input_memo_vis": ("メモ_来店", ""),
 }
 
@@ -227,7 +222,7 @@ if menu_changed:
     st.session_state.pop("selected_visit_id", None)
     st.session_state.pop("search_customer_name", None)
     st.session_state.pop("search_visit_name", None)
-    st.session_state.customer_mode_radio = "新規顧客"
+    st.session_state.customer_mode_radio = "新規顧客入力"
 
     # ★ 最後に prev_menu 更新
     st.session_state.prev_menu = menu
@@ -238,12 +233,12 @@ if menu_changed:
 if menu == "顧客情報入力":
 
     if "customer_mode_radio" not in st.session_state:
-        st.session_state.customer_mode_radio = "新規顧客"
+        st.session_state.customer_mode_radio = "新規顧客入力"
 
     # --- 顧客区分（radioは1回だけ！） ---
     customer_mode = st.radio(
         "顧客区分",
-        ["新規顧客","既存顧客"],
+        ["新規顧客入力","既存顧客編集"],
         index=0,
         key="customer_mode_radio"
     )
@@ -257,7 +252,7 @@ if menu == "顧客情報入力":
 
     # --- 削除状態チェック ---
     is_deleted = False
-    if customer_mode == "既存顧客" and cid:
+    if customer_mode == "既存顧客編集" and cid:
         target = customer_df[customer_df["顧客_ID"] == cid]
         if not target.empty:
             customer_record = target.iloc[0]
@@ -275,21 +270,21 @@ if menu == "顧客情報入力":
     prev = st.session_state.get("prev_customer_mode")
 
     if prev != customer_mode:
-        if customer_mode == "新規顧客":
+        if customer_mode == "新規顧客入力":
             for key in CUSTOMER_STATE_MAP:
                 st.session_state.pop(key, None)
 
     st.session_state.prev_customer_mode = customer_mode
 
-    if customer_mode == "既存顧客" and customer_df.empty:
+    if customer_mode == "既存顧客編集" and customer_df.empty:
         st.info("先に新規顧客を登録してください")
         st.stop()
 
     row = {}
 
-    if customer_mode == "既存顧客" and not customer_df.empty:
-        search_name = st.text_area("氏名・ニックネーム検索（部分一致：空白を挟んで入力で複数検索可）", "")
-        search_col = customer_df["氏名"].fillna("") + customer_df["ニックネーム"].fillna("")
+    if customer_mode == "既存顧客編集" and not customer_df.empty:
+        search_name = st.text_area("≪ 顧客検索 ≫　氏名・ふりがな・ニックネーム検索（部分一致：空白を挟んで入力で複数検索可）", "")
+        search_col = customer_df["氏名"].fillna("") + customer_df["ふりがな"].fillna("")+ customer_df["ニックネーム"].fillna("")
 
         if search_name:
             import re
@@ -305,12 +300,12 @@ if menu == "顧客情報入力":
         name_labels = ["（未選択）"]
         name_map = {}
 
-        for _, r in filtered_df.sort_values("ニックネーム").iterrows():
-            label = f'{r["氏名"]}（{r["ニックネーム"]}）'
+        for _, r in filtered_df.sort_values("ふりがな").iterrows():
+            label = f'{r["氏名"]}：{r["ふりがな"]}（{r["ニックネーム"]}）'
             name_labels.append(label)
             name_map[label] = r["顧客_ID"]
 
-        selected_label = st.selectbox("氏名・ニックネームを選択",     
+        selected_label = st.selectbox("≪ 顧客選択 ≫",     
             name_labels,key="customer_name_big_select_customer")
 
         if selected_label != "（未選択）":
@@ -322,23 +317,19 @@ if menu == "顧客情報入力":
 
     # ★ 顧客切替フラグ
     if (cid and st.session_state.get("loaded_customer_id") != cid
-            and customer_mode == "既存顧客"):
+            and customer_mode == "既存顧客編集"):
         st.session_state.loaded_customer_id = cid
 
         # ---- 顧客情報を一括セット ----
         st.session_state.update({
             "input_name": row.get("氏名", ""),
+            "input_kana": row.get("ふりがな", ""),
             "input_nick": row.get("ニックネーム", ""),
-            "input_addr": row.get("住所", ""),
+            "input_job": row.get("会社名", ""),
             "input_tel": row.get("電話番号", ""),
+            "input_addr": row.get("住所", ""),    
             "input_birth": safe_date(row.get("生年月日")),
-            "input_job": row.get("勤務先・業種", ""),
-            "input_brand": row.get("タバコ_銘柄", ""),
-            "input_like": row.get("好き", ""),
-            "input_dislike": row.get("苦手", ""),
             "input_first_visit": safe_date(row.get("初回来店日")),
-            "input_intro_name": row.get("紹介者_氏名", ""),
-            "input_memo_cus": row.get("メモ_顧客", ""),
         })
 
         st.session_state.customer_loaded = True
@@ -353,8 +344,7 @@ if menu == "顧客情報入力":
     # =====================
     # 顧客情報（事前定義）
     # =====================
-    if customer_mode == "新規顧客":
-
+    if customer_mode == "新規顧客入力":
         init_key = "customer_initialized"
 
         if st.session_state.get(init_key) != True:
@@ -382,7 +372,7 @@ if menu == "顧客情報入力":
         target = customer_df.query("顧客_ID == @cid")
 
         if target.empty:
-            st.warning("氏名・ニックネームを選択してください")
+            st.warning("顧客を選択してください")
             st.stop()
 
         customer_record = target.iloc[0]
@@ -392,40 +382,31 @@ if menu == "顧客情報入力":
 
     with col1:
         name = st.text_area("氏名", key="input_name",height=60, disabled=is_deleted)
+        kana = st.text_area("ふりがな", key="input_kana",height=60, disabled=is_deleted)        
         nick = st.text_area("ニックネーム", key="input_nick",height=60, disabled=is_deleted)
-        addr = st.text_area("住所", key="input_addr",height=60, disabled=is_deleted)
-        tel = st.text_area("電話番号", key="input_tel",height=60, disabled=is_deleted)
-        birth = st.date_input(
-            "生年月日",
-            min_value=date(1900, 1, 1),
-            max_value=date.today(),
-            key="input_birth",
-            disabled=is_deleted
-        )
-        work = st.text_area("勤務先・業種", key="input_job",height=60, disabled=is_deleted)
+        job = st.text_area("会社名", key="input_job",height=60, disabled=is_deleted)
+
 
     with col2:
-        brand = st.text_area("タバコ_銘柄", key="input_brand",height=60, disabled=is_deleted)
-        like = st.text_area("好き", key="input_like",height=60, disabled=is_deleted)
-        dislike = st.text_area("苦手", key="input_dislike",height=60, disabled=is_deleted)
-        first = st.date_input(
-            "初回来店日",
-            min_value=date(2000, 1, 1),
-            max_value=date.today(),
-            key="input_first_visit", 
-            disabled=is_deleted
-        )
-        intro = st.text_area("紹介者_氏名", key="input_intro_name",height=60, disabled=is_deleted)
-        memo_cus = st.text_area("メモ_顧客", key="input_memo_cus",height=60, disabled=is_deleted)
+        tel = st.text_area("電話番号", key="input_tel",height=60, disabled=is_deleted)
+        addr = st.text_area("住所", key="input_addr",height=60, disabled=is_deleted)
+        birth = st.date_input("生年月日",min_value=date(1900, 1, 1),max_value=date.today(),
+                                key="input_birth",disabled=is_deleted)
+        first = st.date_input("初回来店日",min_value=date(2000, 1, 1),max_value=date.today(),
+                                key="input_first_visit", disabled=is_deleted)
 
     # ==================
     # ボタン_顧客情報
     # ==================
     save_customer = st.button("顧客情報_保存", disabled=is_deleted)
-    delete_btn = st.button("顧客情報_削除", disabled=is_deleted)
+    if customer_mode == "新規顧客入力":
+        delete_btn = st.button("顧客情報_削除", disabled=not is_deleted)
+    else:
+        delete_btn = st.button("顧客情報_削除", disabled=is_deleted)
+
     restore_btn = st.button("顧客情報_復元", disabled=not is_deleted)
 
-    # 保存メッセージ表示
+    # 保存メッセージ表示設定
     if "flash_message" in st.session_state:
         st.success(st.session_state.flash_message)
 
@@ -473,18 +454,16 @@ if menu == "顧客情報入力":
 
         payload = {
             "mode": "customer_only",
+
             "氏名": name,
+            "ふりがな": kana,            
             "ニックネーム": nick,
-            "住所": addr,
+            "会社名": job,
             "電話番号": tel,
+            "住所": addr,
             "生年月日": date_to_str(birth),
-            "勤務先・業種": work,
-            "タバコ_銘柄": brand,
-            "好き": like,
-            "苦手": dislike,
             "初回来店日": date_to_str(first),
-            "紹介者_氏名": intro,
-            "メモ_顧客": memo_cus,
+
             "顧客_ID": cid,
             "削除": "0"
         }
@@ -511,17 +490,17 @@ elif menu == "来店情報入力":
 
     # --- visit_mode 初期化 ---
     if "visit_mode" not in st.session_state:
-        st.session_state.visit_mode = "新規来店"
+        st.session_state.visit_mode = "新規来店入力"
 
     # 保存後は編集状態を維持
     if st.session_state.get("return_to_edit"):
-        st.session_state.visit_mode = "既存来店履歴を編集"
+        st.session_state.visit_mode = "既存来店履歴編集"
         del st.session_state.return_to_edit
 
     # --- radio（1回だけ） ---
     visit_mode = st.radio(
         "来店入力モード",
-        ["新規来店", "既存来店履歴を編集"],
+        ["新規来店入力", "既存来店履歴編集"],
         key="visit_mode"
     )
 
@@ -537,8 +516,8 @@ elif menu == "来店情報入力":
     # ★ 顧客IDは必ず session_state から取得（未選択時は ""）
     cid = st.session_state.get("current_customer_id", "")    
     
-    search_name = st.text_area("氏名・ニックネーム検索（部分一致：空白を挟んで入力で複数検索可）", "")
-    search_col = active_customer_df["氏名"].fillna("") + active_customer_df["ニックネーム"].fillna("")
+    search_name = st.text_area("≪ 顧客検索 ≫　氏名・ニックネーム検索（部分一致：空白を挟んで入力で複数検索可）", "")
+    search_col = active_customer_df["氏名"].fillna("") + active_customer_df["ふりがな"].fillna("")+ active_customer_df["ニックネーム"].fillna("")
 
     if search_name:
         import re
@@ -554,12 +533,12 @@ elif menu == "来店情報入力":
     name_labels = ["（未選択）"]
     name_map = {}
 
-    sorted_df = filtered_df.sort_values("ニックネーム")
-    labels = sorted_df["氏名"] + "（" + sorted_df["ニックネーム"] + "）"
+    sorted_df = filtered_df.sort_values("ふりがな")
+    labels = sorted_df["氏名"] + "：" + sorted_df["ふりがな"] + "（" + sorted_df["ニックネーム"] + "）"
     name_labels = ["（未選択）"] + labels.tolist()
     name_map = dict(zip(labels, sorted_df["顧客_ID"]))
 
-    selected_label = st.selectbox("氏名・ニックネームを選択",
+    selected_label = st.selectbox("≪ 顧客選択 ≫",
         name_labels, key="customer_name_big_select_visit")
 
     if selected_label != "（未選択）":
@@ -575,7 +554,7 @@ elif menu == "来店情報入力":
     # =====================  
     vid = st.session_state.get("current_visit_id", "")
 
-    if visit_mode == "既存来店履歴を編集":
+    if visit_mode == "既存来店履歴編集":
 
         if not cid:
             st.info("先に顧客を選択してください")
@@ -627,7 +606,7 @@ elif menu == "来店情報入力":
                 # --- 削除判定（最終版）---
                 is_deleted = False
 
-                if visit_mode == "既存来店履歴を編集":
+                if visit_mode == "既存来店履歴編集":
                     vid = st.session_state.get("selected_visit_id")
 
                     if vid:
@@ -657,12 +636,12 @@ elif menu == "来店情報入力":
 
                 is_deleted = str(visit_row.get("削除", "0")) == "1"
 
-    # --- 新規来店 初期化 ---
+    # --- 新規来店入力 初期化 ---
     init_key = f"visit_initialized_for_{cid}"
 
-    editing = visit_mode == "既存来店履歴を編集" and st.session_state.get("selected_visit_id")
+    editing = visit_mode == "既存来店履歴編集" and st.session_state.get("selected_visit_id")
 
-    if visit_mode == "新規来店":
+    if visit_mode == "新規来店入力":
         st.session_state.pop("selected_visit_id", None)
 
         if st.session_state.get(init_key) != True:
@@ -681,25 +660,26 @@ elif menu == "来店情報入力":
         accompany = st.text_area("同伴_氏名", key="input_accompany",height=60, disabled=is_deleted)
         staff = st.text_area("担当_氏名", key="input_staff",height=60, disabled=is_deleted)
         ext = st.number_input("延長回数", min_value=0, max_value=10, key="input_ext", disabled=is_deleted)
-        keep = st.text_area("キープ銘柄", key="input_keep",height=60, disabled=is_deleted)
 
     with col2:
-        same = st.text_area("同時来店_氏名", key="input_same",height=60, disabled=is_deleted)
+        keep = st.text_area("キープ銘柄", key="input_keep",height=60, disabled=is_deleted)
         preget = st.text_area("プレゼント_受", key="input_preget",height=60, disabled=is_deleted)
         pre = st.text_area("プレゼント_渡", key="input_pre",height=60, disabled=is_deleted)
-        event = st.text_area("イベント名", key="input_event",height=60, disabled=is_deleted)
         memovis = st.text_area("メモ_来店", key="input_memo_vis",height=60, disabled=is_deleted) 
 
     # ボタン_来店情報
     save_visit = st.button("来店情報_保存", disabled= is_deleted)
-    delete_btn = st.button("来店情報_削除", disabled= is_deleted)
+    if visit_mode == "新規来店入力":
+        delete_btn = st.button("来店情報_削除", disabled=not is_deleted)
+    else:
+        delete_btn = st.button("来店情報_削除", disabled= is_deleted)
     restore_btn = st.button("来店情報_復元", disabled=not is_deleted)
 
     # 保存メッセージ表示
     if st.session_state.get("flash_message"):
         st.success(st.session_state.flash_message)
 
-    if visit_mode == "既存来店履歴を編集" and vid:
+    if visit_mode == "既存来店履歴編集" and vid:
         if delete_btn:
             vid = st.session_state.get("selected_visit_id")
 
@@ -753,7 +733,7 @@ elif menu == "来店情報入力":
             st.error("顧客が選択されていません")
             st.stop()
 
-        if visit_mode == "新規来店":
+        if visit_mode == "新規来店入力":
             vid = next_id(visit_df, "来店履歴_ID", "V")
         else:
             vid = st.session_state.get("selected_visit_id")
@@ -763,17 +743,17 @@ elif menu == "来店情報入力":
 
         payload = {
             "mode": "visit_only",
+
             "来店日": visit_date.strftime("%Y-%m-%d"),
             "曜日": get_weekday(visit_date),
             "同伴_氏名": accompany,
             "担当_氏名": staff,
             "延長回数": ext,
             "キープ銘柄": keep,
-            "同時来店_氏名": same,
             "プレゼント_受": preget,
             "プレゼント_渡": pre,
-            "イベント名": event,
             "メモ_来店": memovis,
+
             "来店履歴_ID": vid,
             "顧客_ID": cid,
             "削除": "0"
@@ -793,7 +773,7 @@ elif menu == "来店情報入力":
 
         st.session_state.selected_visit_id = vid
 
-        if visit_mode == "新規来店":
+        if visit_mode == "新規来店入力":
             st.session_state.flash_message = "保存しました ✅"
         else:
             st.session_state.flash_message = "更新しました ✅"
@@ -808,8 +788,8 @@ elif menu == "顧客別来店履歴":
     st.header("顧客別来店履歴")
 
     # ① 検索ボックス（常に定義するのが重要）
-    search_name = st.text_area("氏名・ニックネーム検索（部分一致：空白を挟んで入力で複数検索可）",key="search_customer_name")
-    search_col = active_customer_df["氏名"].fillna("") + active_customer_df["ニックネーム"].fillna("")
+    search_name = st.text_area("≪ 顧客検索 ≫　氏名・ふりがな・ニックネーム検索（部分一致：空白を挟んで入力で複数検索可）",key="search_customer_name")
+    search_col = active_customer_df["氏名"].fillna("") + active_customer_df["ふりがな"].fillna("")+ active_customer_df["ニックネーム"].fillna("")
 
     # ② 検索結果で顧客を絞り込む
     if search_name:
@@ -832,26 +812,27 @@ elif menu == "顧客別来店履歴":
     name_map = {}
 
     # 五十音順で並べる
-    filtered_df = filtered_df.sort_values("ニックネーム", ascending=True)
+    filtered_df = filtered_df.sort_values("ふりがな", ascending=True)
 
     for _, row in filtered_df.iterrows():
         cid = row["顧客_ID"]
         name = row["氏名"]
-        nickname = row["ニックネーム"]
+        kana = row["ふりがな"]        
+        nick = row["ニックネーム"]
         count = visit_count.get(cid, 0)
 
-        label = f"{name}（{nickname}）（{count}回）"
+        label = f"{name}：{kana}（{nick}）（{count}回）"
         name_labels.append(label)
         name_map[label] = cid
 
-    selected_label = st.selectbox("氏名・ニックネームを選択", name_labels,
+    selected_label = st.selectbox("≪ 顧客選択 ≫", name_labels,
         key="customer_name_big_select_history")
 
     if not selected_label:
-        st.info("顧客・ニックネームを選択してください")
+        st.info("顧客を選択してください")
     else:
         if selected_label == "（未選択）":
-            st.info("顧客・ニックネームを選択してください")
+            st.info("顧客を選択してください")
             st.stop()
 
         cid = name_map[selected_label]
@@ -908,7 +889,7 @@ elif menu == "日付別来店一覧":
     date_labels = ["（日付を選択）"] + [f"{d}({get_weekday(pd.to_datetime(d))})（{date_count[d]}件）"for d in date_list]
 
     # ★④ selectbox
-    selected_label = st.selectbox("来店日を選択",date_labels,index=0,key="visit_date_select")
+    selected_label = st.selectbox("≪ 来店日選択 ≫",date_labels,index=0,key="visit_date_select")
 
     if selected_label == "（日付を選択）":
         st.info("来店日を選択してください")
@@ -922,11 +903,11 @@ elif menu == "日付別来店一覧":
 
     target["来店日"] = pd.to_datetime(target["来店日"])
 
-    # 顧客ID → 氏名・ニックネームに変換
-    target = target.merge(customer_df[["顧客_ID", "氏名","ニックネーム"]], on="顧客_ID", how="left")
+    # 顧客ID → 氏名・ふりがな・ニックネームに変換
+    target = target.merge(customer_df[["顧客_ID", "氏名","ふりがな","ニックネーム"]], on="顧客_ID", how="left")
 
-    # ★氏名昇順で並べる
-    target = target.sort_values("氏名", ascending=True)
+    # ★ふりがな昇順で並べる
+    target = target.sort_values("ふりがな", ascending=True)
 
     # ★その順でNoを振る
     target["No"] = range(1, len(target) + 1)
@@ -935,7 +916,7 @@ elif menu == "日付別来店一覧":
     target = target.drop(columns=["来店日", "曜日","顧客_ID", "来店履歴_ID","削除"], errors="ignore")
 
     # ★No → 氏名 → その他の順に並び替え
-    cols = ["No", "氏名","ニックネーム"] + [c for c in target.columns if c not in ["No", "氏名","ニックネーム"]]
+    cols = ["No", "氏名","ふりがな","ニックネーム"] + [c for c in target.columns if c not in ["No", "氏名","ふりがな","ニックネーム"]]
     target = target[cols]
 
     # 表示は新しい順
@@ -975,7 +956,7 @@ elif menu == "削除データ一覧":
     # 来店履歴情報-------
     # 顧客名を結合
     deleted_visit_df = deleted_visit_df.merge(
-        customer_df[["顧客_ID", "氏名", "ニックネーム"]],
+        customer_df[["顧客_ID", "氏名", "ふりがな","ニックネーム"]],
         on="顧客_ID",
         how="left"
     )
@@ -985,7 +966,7 @@ elif menu == "削除データ一覧":
     )
 
     # 並び替え
-    cols = ["氏名", "ニックネーム"] + [c for c in view_visit.columns if c not in ["氏名","ニックネーム"]]
+    cols = ["氏名", "ふりがな","ニックネーム"] + [c for c in view_visit.columns if c not in ["氏名","ふりがな","ニックネーム"]]
 
     view_visit = view_visit[cols]
 
