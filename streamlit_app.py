@@ -381,8 +381,8 @@ if menu == "顧客情報入力":
     col1, col2 = st.columns(2)
 
     with col1:
-        name = st.text_area("氏名", key="input_name",height=60, disabled=is_deleted)
-        kana = st.text_area("ふりがな", key="input_kana",height=60, disabled=is_deleted)        
+        name = st.text_area("氏名【漢字】", key="input_name",height=60, disabled=is_deleted)
+        kana = st.text_area("氏名【ふりがな】", key="input_kana",height=60, disabled=is_deleted)        
         nick = st.text_area("ニックネーム", key="input_nick",height=60, disabled=is_deleted)
         job = st.text_area("会社名", key="input_job",height=60, disabled=is_deleted)
 
@@ -661,15 +661,15 @@ elif menu == "来店情報入力":
 
     with col1:
         visit_date = st.date_input("来店日", key="input_visit_date", disabled=is_deleted)
-        accompany = st.text_area("同伴_氏名", key="input_accompany",height=60, disabled=is_deleted)
-        staff = st.text_area("担当_氏名", key="input_staff",height=60, disabled=is_deleted)
+        accompany = st.text_area("同伴", key="input_accompany",height=60, disabled=is_deleted)
+        staff = st.text_area("担当", key="input_staff",height=60, disabled=is_deleted)
         ext = st.number_input("延長回数", min_value=0, max_value=10, key="input_ext", disabled=is_deleted)
 
     with col2:
         keep = st.text_area("キープ銘柄", key="input_keep",height=60, disabled=is_deleted)
-        preget = st.text_area("プレゼント_受", key="input_preget",height=60, disabled=is_deleted)
-        pre = st.text_area("プレゼント_渡", key="input_pre",height=60, disabled=is_deleted)
-        memovis = st.text_area("メモ_来店", key="input_memo_vis",height=60, disabled=is_deleted) 
+        preget = st.text_area("プレゼント【受】", key="input_preget",height=60, disabled=is_deleted)
+        pre = st.text_area("プレゼント【渡】", key="input_pre",height=60, disabled=is_deleted)
+        memovis = st.text_area("メモ", key="input_memo_vis",height=60, disabled=is_deleted) 
 
     # ボタン_来店情報
     save_visit = st.button("来店情報_保存", disabled= is_deleted)
